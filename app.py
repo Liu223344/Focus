@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from io import BytesIO
-import os
 from pathlib import Path
 import re
 import sys
@@ -15,7 +14,7 @@ try:
 except ImportError:
     pass
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QEvent, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QColor, QImage, QKeySequence, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QGraphicsPixmapItem, QGraphicsRectItem,
@@ -84,8 +83,11 @@ class RawDecodeThread(QThread):
 
 
 class PhotoView(QGraphicsView):
+    file_dropped = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAcceptDrops(True)
         self.scene_ = QGraphicsScene(self)
         self.setScene(self.scene_)
         self.pixmap_item = QGraphicsPixmapItem()
@@ -156,13 +158,29 @@ class PhotoView(QGraphicsView):
         if self.fit_mode:
             self.fit_image()
 
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls() and any(url.isLocalFile() for url in event.mimeData().urls()):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            if url.isLocalFile():
+                self.file_dropped.emit(url.toLocalFile())
+                event.acceptProposedAction()
+                return
+        super().dropEvent(event)
+
 
 class MainWindow(QMainWindow):
     def __init__(self, initial_path: str | None = None):
         super().__init__()
         self.setWindowTitle("索尼原始对焦框看图工具")
         self.resize(1320, 840)
+        self.setAcceptDrops(True)
         self.view = PhotoView(self)
+        self.view.file_dropped.connect(lambda path: self.open_path(Path(path)))
         self.setCentralWidget(self.view)
         self.files: list[Path] = []
         self.index = -1
@@ -188,20 +206,37 @@ class MainWindow(QMainWindow):
         bar = QToolBar("看图", self)
         bar.setMovable(False)
         self.addToolBar(bar)
-        self._action(bar, "打开照片", self.choose_file, "Ctrl+O")
-        self._action(bar, "打开文件夹", self.choose_folder, "Ctrl+Shift+O")
+        open_file = self._action(bar, "打开照片", self.choose_file, "Ctrl+O")
+        open_folder = self._action(bar, "打开文件夹", self.choose_folder, "Ctrl+Shift+O")
         bar.addSeparator()
         self.prev_action = self._action(bar, "上一张", self.previous, "Left")
         self.next_action = self._action(bar, "下一张", self.next, "Right")
         bar.addSeparator()
         self.focus_action = self._action(bar, "原始对焦框", self.toggle_focus, "F", checkable=True)
         self.focus_action.setChecked(True)
-        self._action(bar, "适合窗口", self.view.fit_image, "Ctrl+0")
-        self._action(bar, "100%", self.view.actual_size, "Ctrl+1")
+        fit_action = self._action(bar, "适合窗口", self.view.fit_image, "Ctrl+0")
+        actual_action = self._action(bar, "100%", self.view.actual_size, "Ctrl+1")
         bar.addSeparator()
         self.counter = QLabel("  未打开照片  ")
         bar.addWidget(self.counter)
+        file_menu = self.menuBar().addMenu("文件")
+        file_menu.addAction(open_file)
+        file_menu.addAction(open_folder)
+        view_menu = self.menuBar().addMenu("查看")
+        for action in (self.prev_action, self.next_action, self.focus_action, fit_action, actual_action):
+            view_menu.addAction(action)
         self._update_navigation()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls() and any(url.isLocalFile() for url in event.mimeData().urls()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            if url.isLocalFile():
+                self.open_path(Path(url.toLocalFile()))
+                event.acceptProposedAction()
+                return
 
     def _update_navigation(self):
         self.prev_action.setEnabled(self.index > 0)
@@ -304,11 +339,29 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 
+class FocusApplication(QApplication):
+    file_opened = Signal(str)
+
+    def __init__(self, argv):
+        super().__init__(argv)
+        self.pending_file: str | None = None
+
+    def event(self, event):
+        if event.type() == QEvent.Type.FileOpen:
+            self.pending_file = event.file()
+            self.file_opened.emit(self.pending_file)
+            return True
+        return super().event(event)
+
+
 def main():
-    app = QApplication(sys.argv)
+    app = FocusApplication(sys.argv)
     app.setApplicationName("索尼原始对焦框看图工具")
-    initial = sys.argv[1] if len(sys.argv) > 1 else None
+    initial = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-psn_") else None
     window = MainWindow(initial)
+    app.file_opened.connect(lambda path: window.open_path(Path(path)))
+    if app.pending_file and not initial:
+        window.open_path(Path(app.pending_file))
     window.show()
     sys.exit(app.exec())
 
