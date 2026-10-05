@@ -41,4 +41,4 @@ macOS 使用 **⌘O** 打开照片、**⌘⇧O** 打开文件夹、**⌘0** 适�
 
 ## 参考项目
 
-[Focus Points](https://github.com/FocusPointsLrC/Focus-Points) 是 Apache 2.0 授权的 Lightroom Classic 插件。它对索尼 `FocusLocation` / `FocusFrameSize` 的解释与本工具的 A7C II 样片一致；其文档还提醒，在非原生画幅比例下需要校正对焦坐标区域与输出画面的中心偏移。本工具据此加入了几何位置校正。其他相机记录的 PDAF 点、面部和主体框应与实际对焦框分开显示；目前没有把它们混作对焦结果。
+[Focus Points](https://github.com/FocusPointsLrC/Focus-Points) 是 Lightroom Classic 插件，主体采用 Apache 2.0 许可证，仓库另含 GPLv2 组件。它对索尼 `FocusLocation` / `FocusFrameSize` 的解释与本工具的 A7C II 样片一致；其文档还提醒，在非原生画幅比例下需要校正对焦坐标区域与输出画面的中心偏移。本工具据此加入了几何位置校正，没有复制其代码。其他相机记录的 PDAF 点、面部和主体框应与实际对焦框分开显示；目前没有把它们混作对焦结果。
