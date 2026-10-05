@@ -1,0 +1,23 @@
+name: Build macOS app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  macos-arm64:
+    runs-on: macos-15-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: arm64
+      - name: Build app
+        run: bash build-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SonyFocusViewer-macOS-arm64
+          path: dist/SonyFocusViewer-macOS-arm64.zip
+          if-no-files-found: error
