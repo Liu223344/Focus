@@ -4,6 +4,8 @@ Windows 10/11 和 macOS 桌面看图程序。浏览照片所在文件夹，使�
 
 打开 ARW 时先显示文件内嵌预览，然后在后台解码完整 RAW。检查是否真正清晰时，点击 **100%** 查看完整 RAW。RAW 解码比预览慢，也会占用更多内存。
 
+完整 RAW 的显示亮度会参考相机内嵌预览自动调整，避免从预览切换时突然变暗；这只影响屏幕显示，不修改 ARW 文件。不同的 RAW 解码器仍可能呈现不同的颜色和对比度。
+
 ## 下载或在 Windows 构建
 
 仓库的 **Actions → Build Windows app** 会生成 `SonyFocusViewer-Windows` 构建产物，解压后得到 `SonyFocusViewer.exe`。可直接运行，无需在 Windows 上安装 Python。首次打开可能需要等待系统安全检查；此版本尚未购买代码签名证书。
@@ -36,3 +38,7 @@ macOS 使用 **⌘O** 打开照片、**⌘⇧O** 打开文件夹、**⌘0** 适�
 | 100% | Windows: Ctrl+1 / macOS: ⌘1 |
 
 可在资源管理器中右键照片选择“打开方式”，或把文件路径传给 `SonyFocusViewer.exe`。本版读取 A7C II 样片的 `FocusLocation` 和 `FocusFrameSize`。其他索尼机型若使用不同 MakerNote 布局，会显示照片但不画框。
+
+## 参考项目
+
+[Focus Points](https://github.com/FocusPointsLrC/Focus-Points) 是 Apache 2.0 授权的 Lightroom Classic 插件。它对索尼 `FocusLocation` / `FocusFrameSize` 的解释与本工具的 A7C II 样片一致；其文档还提醒，在非原生画幅比例下需要校正对焦坐标区域与输出画面的中心偏移。本工具据此加入了几何位置校正。其他相机记录的 PDAF 点、面部和主体框应与实际对焦框分开显示；目前没有把它们混作对焦结果。

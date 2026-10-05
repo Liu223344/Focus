@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import sys
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageEnhance, ImageOps, ImageStat
 try:
     from pillow_heif import register_heif_opener
     register_heif_opener()
@@ -45,18 +45,35 @@ def rotate_image(image: Image.Image, orientation: int) -> Image.Image:
     return image.transpose(operation) if operation else image
 
 
+def average_luminance(image: Image.Image) -> float:
+    sample = image.copy()
+    sample.thumbnail((400, 400))
+    return ImageStat.Stat(sample.convert("L")).mean[0]
+
+
+def match_preview_brightness(image: Image.Image, preview_luminance: float) -> Image.Image:
+    """Keep a full RAW render near the camera's embedded preview brightness."""
+    raw_luminance = average_luminance(image)
+    if raw_luminance < 1:
+        return image
+    factor = max(0.5, min(3.0, preview_luminance / raw_luminance))
+    return ImageEnhance.Brightness(image).enhance(factor)
+
+
 class RawDecodeThread(QThread):
     decoded = Signal(int, object)
     failed = Signal(int, str)
 
     def __init__(self, request_id: int, path: Path, orientation: int,
-                 image_width: int, image_height: int, parent=None):
+                 image_width: int, image_height: int, preview_luminance: float,
+                 parent=None):
         super().__init__(parent)
         self.request_id = request_id
         self.path = path
         self.orientation = orientation
         self.image_width = image_width
         self.image_height = image_height
+        self.preview_luminance = preview_luminance
 
     def run(self):
         try:
@@ -77,6 +94,7 @@ class RawDecodeThread(QThread):
                 image = image.crop((left, top, left + self.image_width,
                                     top + self.image_height))
             image = rotate_image(image, self.orientation)
+            image = match_preview_brightness(image, self.preview_luminance)
             self.decoded.emit(self.request_id, to_qimage(image))
         except Exception as exc:
             self.failed.emit(self.request_id, str(exc))
@@ -306,7 +324,8 @@ class MainWindow(QMainWindow):
                 else:
                     self.statusBar().showMessage(f"{info.model} · {info.focus_reason} · 正在解码完整 RAW…")
                 worker = RawDecodeThread(request_id, path, info.orientation,
-                                         info.image_width, info.image_height, self)
+                                         info.image_width, info.image_height,
+                                         average_luminance(preview), self)
                 worker.decoded.connect(self._raw_decoded)
                 worker.failed.connect(self._raw_failed)
                 worker.finished.connect(lambda w=worker: self.workers.remove(w) if w in self.workers else None)
@@ -327,7 +346,7 @@ class MainWindow(QMainWindow):
         self.view.set_image(image, self.current_focus, fit=False)
         path = self.files[self.index]
         detail = "相机原始对焦框可切换" if self.current_focus else "无可用原始对焦框"
-        self.statusBar().showMessage(f"{path.name} · 完整 RAW {image.width()}×{image.height()} · {detail}")
+        self.statusBar().showMessage(f"{path.name} · 完整 RAW {image.width()}×{image.height()} · 亮度已匹配相机预览 · {detail}")
 
     def _raw_failed(self, request_id: int, error: str):
         if request_id == self.request_id:

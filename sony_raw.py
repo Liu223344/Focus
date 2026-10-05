@@ -120,7 +120,8 @@ def read_arw(path: str | Path) -> RawInfo:
             size_offset, _ = t.location(frame_size)
             fw, fh = t.u16(size_offset), t.u16(size_offset + 2)
             if 0 < w <= 20000 and 0 < h <= 20000 and 0 <= x <= w and 0 <= y <= h and 0 < fw <= w and 0 < fh <= h:
-                focus = FocusFrame(w, h, x, y, fw, fh)
+                focus = align_focus_to_image(FocusFrame(w, h, x, y, fw, fh),
+                                             image_width, image_height)
                 reason = ""
     except (KeyError, ValueError, struct.error):
         pass
@@ -129,6 +130,17 @@ def read_arw(path: str | Path) -> RawInfo:
         focus = None
         reason = "这个旋转方向尚未校准，已隐藏对焦框"
     return RawInfo(model, orientation, image_width, image_height, preview, focus, reason)
+
+
+def align_focus_to_image(frame: FocusFrame, image_width: int,
+                         image_height: int) -> FocusFrame:
+    """Map Sony's AF coordinate area to the centered output image area."""
+    x = frame.x + (image_width - frame.image_width) / 2
+    y = frame.y + (image_height - frame.image_height) / 2
+    if not (0 <= x <= image_width and 0 <= y <= image_height):
+        raise ValueError("对焦坐标超出输出画面")
+    return FocusFrame(image_width, image_height, round(x), round(y),
+                      frame.width, frame.height)
 
 
 def orient_focus(frame: FocusFrame, orientation: int) -> FocusFrame:
